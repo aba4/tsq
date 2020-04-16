@@ -14,6 +14,7 @@ eg:
 
 I literally don't know if it is any use but I made it sooo..
 
+``
 tsq: Tasks as a Stack of Queues:
   current / c            print the current task
                          A
@@ -55,6 +56,7 @@ tsq: Tasks as a Stack of Queues:
   I             |   stack
   J K           v
                     Order: J K I D E F G H A B C
+``
 
 How to install:
 * Put it into your ~/bin/ directory or wherever tf you want
