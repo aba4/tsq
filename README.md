@@ -65,3 +65,5 @@ How to install:
 * Use have to have lua-cjson installed so you also have to do:
 * * sudo luarocks install lua-cjson
 I guess you could somehow get the lua-cjson file from luarocks and install it manually but good luck I'm not sure how to do that
+
+Oh, bytw the program in its default state creates afile ~/.tsq.json so if you want that somewhere else you can change that by open the file up and changing it
