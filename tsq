@@ -1,0 +1,393 @@
+#!/usr/bin/luajit
+--[[
+  name: 'tsq' meaning: Tasks as a Stack of Queues
+  License: just don't sue the original creator (me lol)
+]]--
+
+cj = require("cjson")
+-- inspect = require("inspect")
+
+-- Function definitions
+
+function displayCurrent(stack)
+  if table.maxn(stack) > 0 then
+    print(stack[table.maxn(stack)][1])
+  else
+    print("no task")
+  end
+end
+
+function displayStackSize(stack)
+  print(table.maxn(stack))
+end
+
+function displayQueueSize(stack)
+  local n = table.maxn(stack)
+  if n > 0 then
+    print(table.maxn(stack[n]))
+  else
+    print(0)
+  end
+end
+
+function displayTaskNumber(stack)
+  local count = 0
+  for index, taskQueue in ipairs(stack) do
+    count = count + table.maxn(taskQueue)
+  end
+  print(count)
+end
+
+
+
+function displayStack(stack)
+  for index, taskQueue in ipairs(stack) do
+    print(taskQueue[1])
+  end
+end
+
+function displayQueue(stack)
+  if table.maxn(stack) > 0 then
+    for index, task in ipairs(stack[table.maxn(stack)]) do
+      print(task)
+    end
+  end
+end
+
+function displayAll(stack)
+  if table.maxn(stack) > 0 then
+    for index1, taskQueue in ipairs(stack) do
+      for index2, task in ipairs(taskQueue) do
+        io.write(task)
+        if index2 < table.maxn(taskQueue) then io.write(", ") end
+      end
+      print()
+    end
+  end
+end
+
+
+function push(stack, newTask)
+  table.insert(stack, {newTask})
+  displayCurrent(stack)
+end
+
+
+function enqueue(stack, newTask)
+  if table.maxn(stack) == 0 then 
+    push(stack, newTask)
+  else
+    table.insert(stack[table.maxn(stack)], newTask)
+    displayCurrent(stack)
+  end
+end
+
+
+function pop(stack)
+  if table.maxn(stack) == 0 then 
+    displayCurrent(stack)
+    return false 
+  elseif table.maxn(stack[table.maxn(stack)]) == 1 then
+    table.remove(stack)
+  else
+    table.remove(stack[table.maxn(stack)], 1)
+  end
+  displayCurrent(stack)
+end
+
+function defer(stack)
+  local n = table.maxn(stack)
+  if n > 1 then
+    table.insert(stack[n-1], stack[n][1])
+    table.remove(stack[n], 1)
+    if table.maxn(stack[n]) == 0 then
+      table.remove(stack)
+    end
+  elseif n == 1 then
+    table.insert(stack[n], stack[n][1])
+    table.remove(stack[n], 1)
+  end
+  displayCurrent(stack)
+end
+
+function cycle(stack)
+  local n = table.maxn(stack)
+  if n > 0 then
+    table.insert(stack[n], stack[n][1])
+    table.remove(stack[n], 1)
+  end
+  displayCurrent(stack)
+end
+
+function reserve(stack, tasks)
+  if table.maxn(stack) > 0 then
+    if not tasks.reserved then tasks.reserved = {} end
+    table.insert(tasks.reserved, stack[table.maxn(stack)][1])
+    pop(stack)
+  end
+end
+
+function displayReserved(tasks)
+  for index, task in ipairs(tasks.reserved) do
+    print(task)
+  end
+end
+
+function pushReserved(stack, tasks)
+  if table.maxn(tasks.reserved) > 0 then
+    push(stack, tasks.reserved[1])
+    table.remove(tasks.reserved, 1)
+  end
+end
+
+function enqueueReserved(stack, tasks)
+  if table.maxn(tasks.reserved) > 0 then
+    enqueue(stack, tasks.reserved[1])
+    table.remove(tasks.reserved, 1)
+  end
+end
+
+function clearReserved(stack, tasks)
+  tasks.reserved = {}
+end
+
+function clearAll(stack)
+  print("you sure? y/n")
+  if io.read() == "y" then
+    while table.maxn(stack) > 0 do
+      table.remove(stack)
+    end
+  end
+end
+
+function makeUndoPoint(tasks)
+  if not tasks.undoList then 
+    tasks.undoList = {{ stack = {}, reserved = {} }}
+    tasks.undoListTop = 1
+    tasks.redoMax = 2
+  end
+  local undoPoint = { stack = copy(tasks.stack), reserved = copy(tasks.reserved) }
+  tasks.undoListTop = tasks.undoListTop + 1
+  tasks.redoMax = tasks.undoListTop
+  if tasks.undoListTop <= table.maxn(tasks.undoList) then
+    tasks.undoList[tasks.undoListTop] = undoPoint
+  else
+    table.insert(tasks.undoList, undoPoint)
+  end
+  if tasks.maxUndo and table.maxn(tasks.undoList) > tasks.maxUndo then
+    table.remove(tasks.undoList, 1)
+    tasks.undoListTop = tasks.undoListTop - 1
+    tasks.redoMax = tasks.redoMax - 1
+  end
+end
+function undo(tasks)
+  if tasks.undoList and 
+     tasks.undoListTop > 1 
+     then
+    tasks.undoListTop = tasks.undoListTop - 1
+    tasks.stack    = copy(tasks.undoList[tasks.undoListTop].stack)
+    tasks.reserved = copy(tasks.undoList[tasks.undoListTop].reserved)
+  end
+  displayCurrent(tasks.stack)
+end
+function redo(tasks)
+  if tasks.undoList and 
+     tasks.undoListTop < table.maxn(tasks.undoList) and 
+     tasks.redoMax > tasks.undoListTop 
+     then
+    tasks.undoListTop = tasks.undoListTop + 1
+    tasks.stack    = copy(tasks.undoList[tasks.undoListTop].stack)
+    tasks.reserved = copy(tasks.undoList[tasks.undoListTop].reserved)
+  end
+  displayCurrent(tasks.stack)
+end
+
+function set(tasks, keyString, valueString)
+  local value = cj.decode(valueString)
+  if type(value) == "userdata" then value = nil end
+  tasks[keyString] = value
+end
+
+function value(tasks, keyString)
+  io.write(keyString)
+  io.write(" = ")
+  io.write(tostring(tasks[keyString]))
+  -- if tasks[keyString] then
+  --   io.write(tasks[keyString])
+  -- else
+  --   io.write("nil")
+  -- end
+  print()
+end
+
+function debugDisplayTable(tasks)
+  local inspect = require("inspect")
+  print(inspect(tasks))
+end
+
+function copy(obj)
+  local ret
+  if type(obj) == "table" then
+    ret = {}
+    for key, value in pairs(obj) do
+      ret[key] = copy(value)
+    end
+    setmetatable(ret, copy(getmetatable(obj)))
+  else
+    ret = obj
+  end
+  return ret
+end
+
+
+-- Operation part of the program
+
+filename = os.getenv("HOME") .. "/.tsq.json"
+
+tasks = {}
+
+-- read table from file
+file = io.open(filename, "r")
+if file then
+  local wasError = pcall(function() tasks = cj.decode(file:read("*a")) end)
+  if (not wasError) or type(tasks) == "userdata" then
+    tasks = {}
+    tasks.maxUndo = 100
+  else
+    if type(tasks.maxUndo) == "userdata" then
+      tasks.maxUndo = nil
+    end
+  end
+  file:close()
+end
+
+if not tasks.stack then 
+  tasks.stack = {}
+end
+
+argCases = {
+  ["push"]              = function(t) push(tasks.stack, t); makeUndoPoint(tasks) end,
+  ["pop"]               = function(t) pop(tasks.stack); makeUndoPoint(tasks) end,
+  ["current"]           = function(t) displayCurrent(tasks.stack) end,
+  ["enqueue"]           = function(t) enqueue(tasks.stack, t); makeUndoPoint(tasks) end,
+  ["defer"]             = function(t) defer(tasks.stack); makeUndoPoint(tasks) end,
+  ["cycle"]             = function(t) cycle(tasks.stack); makeUndoPoint(tasks) end,
+  ["count"]             = function(t) displayTaskNumber(tasks.stack) end,
+  ["stack-count"]       = function(t) displayStackSize(tasks.stack) end,
+  ["queue-count"]       = function(t) displayQueueSize(tasks.stack) end,
+  ["stack"]             = function(t) displayStack(tasks.stack) end,
+  ["queue"]             = function(t) displayQueue(tasks.stack) end,
+  ["tree"]              = function(t) displayAll(tasks.stack) end,
+  ["clear"]             = function(t) clearAll(tasks.stack); makeUndoPoint(tasks) end,
+  ["reserve"]           = function(t) reserve(tasks.stack, tasks); makeUndoPoint(tasks) end,
+  ["push-reserved"]     = function(t) pushReserved(tasks.stack, tasks); makeUndoPoint(tasks) end,
+  ["enqueue-reserved"]  = function(t) enqueueReserved(tasks.stack, tasks); makeUndoPoint(tasks) end,
+  ["clear-reserved"]    = function(t) clearReserved(tasks.stack, tasks); makeUndoPoint(tasks) end,
+  ["reserved"]          = function(t) displayReserved(tasks) end,
+  ["undo"]              = function(t) undo(tasks) end,
+  ["redo"]              = function(t) redo(tasks) end,
+  ["debugDisplay"]      = function(t) debugDisplayTable(tasks) end,
+  ["value"]             = function(t) value(tasks, t) end
+}
+-- duplicates:
+argCases.p   = argCases["push"]
+argCases.o   = argCases["pop"]
+argCases.c   = argCases["current"]
+argCases.e   = argCases["enqueue"]
+argCases.d   = argCases["defer"]
+argCases.y   = argCases["cycle"]
+argCases.n   = argCases["count"]
+argCases.sc  = argCases["stack-count"]
+argCases.qc  = argCases["queue-count"]
+argCases.s   = argCases["stack"]
+argCases.q   = argCases["queue"]
+argCases.t   = argCases["tree"]
+argCases.r   = argCases["reserve"]
+argCases.pr  = argCases["push-reserved"]
+argCases.er  = argCases["enqueue-reserved"]
+argCases.cr  = argCases["clear-reserved"]
+argCases.tr  = argCases["reserved"]
+argCases.u   = argCases["undo"]
+argCases.w   = argCases["redo"]
+argCases.v   = argCases["value"]
+
+if table.maxn(arg) > 0 then
+  if arg[1] == "set" or arg[1] == "=" then
+    set(tasks, arg[2], table.concat(arg, " ", 3))
+  else
+    fn = argCases[arg[1]]
+    if fn then
+      fn(table.concat(arg, " ", 2))
+    end
+  end
+elseif table.maxn(arg) == 0 then
+  print([[
+tsq: Tasks as a Stack of Queues:
+  current / c            print the current task
+                         A
+                         C B   <- current
+  push / p               push a new task onto the stack and make it current
+                         A
+                         C B
+                         N     <- pushed
+  enqueue / e            queue a new task, these will be started after popping the current task
+                         A
+                         C B N <- queued
+  pop / o                remove the current task from the queue and proceed to the latest enqueued task, or last pushed
+                         A     
+                         B     <- popped
+                           and:
+                         A     <- popped again
+  defer / d              move the current task down the stack and enqueue it
+                         A C   <- defered
+                         B
+  cycle / y              move the current task to the end of the current queue
+                         A
+                         B C   <- cycled
+  count / n              gives the current total number of tasks
+  stack-count / sc       gives the current size of the stack
+  queue-count / qc       gives the current size of the queue at the top of the stack
+  stack / s              prints the first task in each queue of the stack
+  queue / q              prints the current queue
+  tree / t               prints the whole stack-queue tree sorta like below
+  clear                  clears the entire stack
+  reserve / r            sets the current task aside in a separate stack
+  push-reserved / pr     pushes a reserved task onto the stack
+  enqueue-reserved / er  enqueues a reserved task onto the current queue
+  clear-reserved / cr    clears all reserved tasks
+  value / v              print internal variable values
+  set / =                set internal variable values
+  -------------
+  A B C          <- queue
+  D E F G H     ^
+  I             |   stack
+  J K           v
+                    Order: J K I D E F G H A B C
+]])
+end
+
+-- todo: add stdin support:
+--  todo: add multiple stdin commands support
+-- stdIn = io.read("*l")
+
+-- write table to file
+file = io.open(filename, "w")
+-- print(inspect(tasks, {depth = 100}))
+file:write(cj.encode(tasks))
+file:close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
