@@ -1,5 +1,5 @@
 # tsq
-Tasks as a Stack of Queues
+Tasks as a Stack of Queues: a _lua script_ implementation
 
 Just an idea I have been wanting to try out for awhile
 
@@ -12,7 +12,13 @@ eg:
   tsq o  -- current task is now fix car
   tsq e call such and such -- this will be the next task once you pop the current one
 
-I literally don't know if it is any use but I made it sooo..
+You can also: defer (enqueue current one stack position down), reserve (save in a hidden queue for later), undo and redo, cycle the queue
+
+~~I literally don't know if it is any use but I made it sooo..~~
+
+Its actually pretty useful
+
+There are variables that you can set using the command tsq set varname value, currently the variables are: undoMax or something like that I forgot what I called it. Open up the file and check the variable name if you care to change it
 
 ```
 tsq: Tasks as a Stack of Queues:
@@ -60,10 +66,27 @@ tsq: Tasks as a Stack of Queues:
 
 How to install:
 * Put it into your ~/bin/ directory or wherever tf you want
-* chmod +x tsq.lua
-* Optionally remove the .lua extension to make it quicker to type
-* Use have to have lua-cjson installed so you also have to do:
+* chmod +x tsq ~~.lua~~
+* ~~Optionally remove the .lua extension to make it quicker to type~~
+* You have to have lua-cjson installed so you also have to do:
 * * sudo luarocks install lua-cjson
 I guess you could somehow get the lua-cjson file from luarocks and install it manually but good luck I'm not sure how to do that
 
-Oh, bytw the program in its default state creates afile ~/.tsq.json so if you want that somewhere else you can change that by open the file up and changing it
+Oh, bytw the program in its default state creates a file ~/.tsq.json so if you want that somewhere else you can change that by opening the file up and changing it
+
+Here is a little (tclsh) script you can use to make a zenity popup window to push a new task
+```
+#!/usr/bin/tclsh
+set res ""
+catch {set res [exec zenity --entry --width 400 --title "tsq push" --text [exec tsq c]]}
+if {$res != ""} {exec tsq p $res}
+```
+
+If you use xbindkeys then you can add something like
+```
+# zenity current
+"exec zenity --info --width 400 --title "tsq current" --text "$(tsq c)""
+  alt + c
+```
+To your ~/.xbindkeysrc to make a hotkey for this
+
